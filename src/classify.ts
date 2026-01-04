@@ -13,6 +13,8 @@ export type ClassificationInput = {
 
 export type ClassificationOutput = {
   classification: TraceClassification;
+  confidence: number;
+  negative_proofs: string[];
   error?: string;
 };
 
@@ -21,11 +23,11 @@ export function classify(input: ClassificationInput): ClassificationOutput {
   const confirmationStatus = selected?.confirmationStatus;
 
   if (confirmationStatus === 'finalized' && err == null) {
-    return { classification: 'FINALIZED_OK' };
+    return buildResult('FINALIZED_OK', input);
   }
 
   if (err != null) {
-    return { classification: 'EXECUTION_ERROR', error: stringifyError(err) };
+    return buildResult('EXECUTION_ERROR', input, stringifyError(err));
   }
 
   if (
@@ -34,11 +36,11 @@ export function classify(input: ClassificationInput): ClassificationOutput {
     currentBlockHeight != null &&
     currentBlockHeight > input.evidence.lastValidBlockHeight
   ) {
-    return { classification: 'BLOCKHASH_EXPIRED' };
+    return buildResult('BLOCKHASH_EXPIRED', input);
   }
 
   if (confirmationStatus == null && observedDurationMs >= input.pendingThresholdMs) {
-    return { classification: 'NOT_PROPAGATED' };
+    return buildResult('NOT_PROPAGATED', input);
   }
 
   if (
@@ -46,10 +48,10 @@ export function classify(input: ClassificationInput): ClassificationOutput {
     confirmationStatus !== 'finalized' &&
     observedDurationMs >= input.pendingThresholdMs
   ) {
-    return { classification: 'LEADER_OR_CONGESTION' };
+    return buildResult('LEADER_OR_CONGESTION', input);
   }
 
-  return { classification: 'LEADER_OR_CONGESTION' };
+  return buildResult('LEADER_OR_CONGESTION', input);
 }
 
 function stringifyError(err: unknown): string {
@@ -64,4 +66,100 @@ function stringifyError(err: unknown): string {
   } catch {
     return String(err);
   }
+}
+
+function buildResult(
+  classification: TraceClassification,
+  input: ClassificationInput,
+  error?: string,
+): ClassificationOutput {
+  const confidence = computeConfidence(classification, input);
+  const negative_proofs = computeNegativeProofs(classification, input);
+  return { classification, confidence, negative_proofs, error };
+}
+
+function computeConfidence(
+  classification: TraceClassification,
+  input: ClassificationInput,
+): number {
+  const perRpcCount = input.evidence.perRpc?.length ?? 0;
+  const base =
+    !input.evidence.rpcDisagreement && perRpcCount >= 2
+      ? 0.85
+      : perRpcCount === 1
+        ? 0.65
+        : 0.5;
+
+  const adjustment = (() => {
+    switch (classification) {
+      case 'FINALIZED_OK':
+        return 0.1;
+      case 'EXECUTION_ERROR':
+        return 0.05;
+      case 'BLOCKHASH_EXPIRED':
+        return 0.05;
+      case 'NOT_PROPAGATED':
+        return -0.1;
+      case 'LEADER_OR_CONGESTION':
+        return -0.15;
+      case 'RPC_REJECT':
+      case 'PREFLIGHT_FAIL':
+        return 0.0;
+    }
+  })();
+
+  return clamp01(base + adjustment);
+}
+
+function computeNegativeProofs(
+  classification: TraceClassification,
+  input: ClassificationInput,
+): string[] {
+  const proofs: string[] = [];
+  const confirmationStatus = input.selected?.confirmationStatus;
+  const timedOut = input.observedDurationMs >= input.pendingThresholdMs;
+
+  if (classification === 'LEADER_OR_CONGESTION') {
+    if (timedOut) {
+      proofs.push('finality_not_reached_before_timeout');
+    }
+    if (input.err == null) {
+      proofs.push('no_execution_error_observed');
+    }
+  }
+
+  if (classification === 'NOT_PROPAGATED') {
+    proofs.push('never_observed_on_chain');
+    if (input.evidence.lastValidBlockHeight == null) {
+      proofs.push('last_valid_blockheight_unknown');
+    }
+  }
+
+  if (classification === 'BLOCKHASH_EXPIRED') {
+    proofs.push('last_valid_blockheight_passed');
+  }
+
+  if (classification === 'FINALIZED_OK') {
+    proofs.push('execution_error_absent');
+  }
+
+  if (classification === 'EXECUTION_ERROR') {
+    proofs.push('execution_error_observed');
+  }
+
+  if (confirmationStatus == null && input.err == null && timedOut) {
+    proofs.push('no_confirmation_status_before_timeout');
+  }
+
+  return proofs;
+}
+
+function clamp01(value: number): number {
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return Number(value.toFixed(2));
 }

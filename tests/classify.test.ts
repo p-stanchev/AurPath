@@ -22,6 +22,8 @@ describe('classify', () => {
     });
 
     expect(result.classification).toBe('FINALIZED_OK');
+    expect(result.confidence).toBeGreaterThan(0);
+    expect(result.negative_proofs.length).toBeGreaterThan(0);
   });
 
   it('returns EXECUTION_ERROR when err exists', () => {
@@ -32,6 +34,7 @@ describe('classify', () => {
     });
 
     expect(result.classification).toBe('EXECUTION_ERROR');
+    expect(result.negative_proofs).toContain('execution_error_observed');
   });
 
   it('returns EXECUTION_ERROR even if finalized when err exists', () => {
@@ -53,6 +56,7 @@ describe('classify', () => {
     });
 
     expect(result.classification).toBe('BLOCKHASH_EXPIRED');
+    expect(result.negative_proofs).toContain('last_valid_blockheight_passed');
   });
 
   it('returns NOT_PROPAGATED when never observed and timeout reached', () => {
@@ -62,6 +66,7 @@ describe('classify', () => {
     });
 
     expect(result.classification).toBe('NOT_PROPAGATED');
+    expect(result.negative_proofs).toContain('never_observed_on_chain');
   });
 
   it('returns LEADER_OR_CONGESTION when confirmed but not finalized at timeout', () => {
@@ -72,5 +77,6 @@ describe('classify', () => {
     });
 
     expect(result.classification).toBe('LEADER_OR_CONGESTION');
+    expect(result.negative_proofs).toContain('finality_not_reached_before_timeout');
   });
 });

@@ -45,6 +45,8 @@ export type TraceResult = {
   rpc_used: string[];
   observed_status: TimelineEvent[];
   phase_graph: PhaseEdge[];
+  confidence: number;
+  negative_proofs: string[];
   error?: string;
   classification: TraceClassification;
   evidence: TraceEvidence;

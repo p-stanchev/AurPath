@@ -80,11 +80,13 @@ export async function submitAndTrace(input: SubmitTraceInput): Promise<TraceResu
         submit_time,
         rpc_used: pool.getUsedUrls(),
         observed_status: [],
-    phase_graph: buildPhaseGraph({
-      observed_status: [],
-      evidence,
-      submitAccepted: false,
-    }),
+        phase_graph: buildPhaseGraph({
+          observed_status: [],
+          evidence,
+          submitAccepted: false,
+        }),
+        confidence: 0.7,
+        negative_proofs: ['preflight_failed'],
         error: stringifyError(simResult.value.value.err),
         classification: 'PREFLIGHT_FAIL',
         evidence,
@@ -256,6 +258,8 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
       submitAccepted: input.submitAcceptedAtMs != null,
       submitAcceptedAtMs: input.submitAcceptedAtMs,
     }),
+    confidence: classificationResult.confidence,
+    negative_proofs: classificationResult.negative_proofs,
     error: classificationResult.error,
     classification: classificationResult.classification,
     evidence,
@@ -451,6 +455,8 @@ function buildSubmitErrorResult(args: {
       },
       submitAccepted: false,
     }),
+    confidence: 0.5,
+    negative_proofs: ['submit_rejected'],
     error: args.errorMessage,
     classification: args.classificationOverride,
     evidence: {
@@ -607,17 +613,19 @@ function executionAt(input: {
 
 function phaseSource(evidence: TraceEvidence): string {
   const rpcUrl = evidence.selected?.rpcUrl ?? evidence.rpcUrl ?? 'unknown';
-  if (!evidence.rpcDisagreement && (evidence.perRpc?.length ?? 0) > 1) {
+  const validCount = (evidence.perRpc ?? []).filter((entry) => !entry.rpcError).length;
+  if (!evidence.rpcDisagreement && validCount > 1) {
     return 'quorum';
   }
   return `rpc:${rpcUrl}`;
 }
 
 function phaseConfidence(evidence: TraceEvidence): number {
-  if (!evidence.rpcDisagreement && (evidence.perRpc?.length ?? 0) > 1) {
+  const validCount = (evidence.perRpc ?? []).filter((entry) => !entry.rpcError).length;
+  if (!evidence.rpcDisagreement && validCount > 1) {
     return 0.8;
   }
-  if ((evidence.perRpc?.length ?? 0) === 1) {
+  if (validCount === 1) {
     return 0.6;
   }
   return 0.4;

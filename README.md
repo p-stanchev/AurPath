@@ -119,6 +119,11 @@ const result = await traceTransaction({
       "confidence": 0.6
     }
   ],
+  "confidence": 0.81,
+  "negative_proofs": [
+    "finality_not_reached_before_timeout",
+    "no_execution_error_observed"
+  ],
   "error": null,
   "classification": "LEADER_OR_CONGESTION",
   "evidence": {
