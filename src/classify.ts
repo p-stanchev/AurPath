@@ -82,11 +82,11 @@ function computeConfidence(
   classification: TraceClassification,
   input: ClassificationInput,
 ): number {
-  const perRpcCount = input.evidence.perRpc?.length ?? 0;
+  const validCount = (input.evidence.perRpc ?? []).filter((entry) => !entry.rpcError).length;
   const base =
-    !input.evidence.rpcDisagreement && perRpcCount >= 2
+    !input.evidence.rpcDisagreement && validCount >= 2
       ? 0.85
-      : perRpcCount === 1
+      : validCount === 1
         ? 0.65
         : 0.5;
 
@@ -108,7 +108,8 @@ function computeConfidence(
     }
   })();
 
-  return clamp01(base + adjustment);
+  const capped = applyEvidenceCap(base + adjustment, validCount);
+  return clamp01(capped);
 }
 
 function computeNegativeProofs(
@@ -162,4 +163,14 @@ function clamp01(value: number): number {
     return 1;
   }
   return Number(value.toFixed(2));
+}
+
+function applyEvidenceCap(value: number, validCount: number): number {
+  if (validCount <= 1) {
+    return Math.min(value, 0.85);
+  }
+  if (validCount === 2) {
+    return Math.min(value, 0.95);
+  }
+  return Math.min(value, 0.99);
 }
