@@ -15,6 +15,7 @@ import {
 } from './rpc.js';
 import {
   PerRpcObservation,
+  PhaseEdge,
   SubmitTraceInput,
   TraceEvidence,
   TraceInput,
@@ -39,6 +40,7 @@ export async function traceTransaction(input: TraceInput): Promise<TraceResult> 
     timeoutMs,
     quorumK: input.quorumK,
     maxRpcsPerTick: input.maxRpcsPerTick,
+    perTickTimeoutMs: input.perTickTimeoutMs,
   });
 }
 
@@ -46,6 +48,7 @@ export async function submitAndTrace(input: SubmitTraceInput): Promise<TraceResu
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const pool = new RpcPool(input.rpcUrls);
   const submit_time = new Date().toISOString();
+  const submitStartMs = Date.now();
 
   if (!input.skipPreflight) {
     const versioned = VersionedTransaction.deserialize(input.rawTransaction);
@@ -77,6 +80,11 @@ export async function submitAndTrace(input: SubmitTraceInput): Promise<TraceResu
         submit_time,
         rpc_used: pool.getUsedUrls(),
         observed_status: [],
+    phase_graph: buildPhaseGraph({
+      observed_status: [],
+      evidence,
+      submitAccepted: false,
+    }),
         error: stringifyError(simResult.value.value.err),
         classification: 'PREFLIGHT_FAIL',
         evidence,
@@ -102,12 +110,17 @@ export async function submitAndTrace(input: SubmitTraceInput): Promise<TraceResu
     });
   }
 
+  const submitAcceptedAtMs = Date.now() - submitStartMs;
+
   return traceLoop({
     signature: sendResult.value,
     rpcUrls: input.rpcUrls,
     timeoutMs,
     quorumK: input.quorumK,
     maxRpcsPerTick: input.maxRpcsPerTick,
+    perTickTimeoutMs: input.perTickTimeoutMs,
+    submitStartMs,
+    submitAcceptedAtMs,
   });
 }
 
@@ -117,14 +130,19 @@ type TraceLoopInput = {
   timeoutMs: number;
   quorumK?: number;
   maxRpcsPerTick?: number;
+  perTickTimeoutMs?: number;
+  submitStartMs?: number;
+  submitAcceptedAtMs?: number;
 };
 
 async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
   const { signature, rpcUrls, timeoutMs } = input;
   const quorumK = input.quorumK ?? DEFAULT_QUORUM_K;
   const maxRpcsPerTick = input.maxRpcsPerTick ?? DEFAULT_MAX_RPCS_PER_TICK;
+  const perTickTimeoutMs = input.perTickTimeoutMs ?? 1_200;
   const pool = new RpcPool(rpcUrls);
   const submit_time = new Date().toISOString();
+  const startMs = input.submitStartMs ?? Date.now();
   const observed_status: TimelineEvent[] = [];
   const evidence: TraceEvidence = {
     rpcUrlsUsed: [],
@@ -138,7 +156,6 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
   let lastBlockhashRefresh = 0;
   let lastBlockHeightRefresh = 0;
 
-  const startMs = Date.now();
   const deadline = startMs + timeoutMs;
 
   while (Date.now() < deadline) {
@@ -146,6 +163,7 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
       rpcUrls,
       signature,
       maxRpcsPerTick,
+      perTickTimeoutMs,
     );
     evidence.perRpc = perRpcObservations;
     evidence.rpcUrlsUsed = perRpcObservations.map((entry) => entry.rpcUrl);
@@ -232,6 +250,12 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
     submit_time,
     rpc_used: pool.getUsedUrls(),
     observed_status,
+    phase_graph: buildPhaseGraph({
+      observed_status,
+      evidence,
+      submitAccepted: input.submitAcceptedAtMs != null,
+      submitAcceptedAtMs: input.submitAcceptedAtMs,
+    }),
     error: classificationResult.error,
     classification: classificationResult.classification,
     evidence,
@@ -242,10 +266,13 @@ async function pollRpcObservations(
   rpcUrls: string[],
   signature: string,
   maxRpcsPerTick = DEFAULT_MAX_RPCS_PER_TICK,
+  perTickTimeoutMs = 1_200,
 ): Promise<PerRpcObservation[]> {
   const urls = rpcUrls.slice(0, maxRpcsPerTick);
-  const statusResults = await callParallel(urls, (conn) =>
-    conn.getSignatureStatuses([signature], { searchTransactionHistory: true }),
+  const statusResults = await callParallel(
+    urls,
+    (conn) => conn.getSignatureStatuses([signature], { searchTransactionHistory: true }),
+    perTickTimeoutMs,
   );
 
   const perRpc: PerRpcObservation[] = [];
@@ -253,6 +280,7 @@ async function pollRpcObservations(
 
   statusResults.forEach((result) => {
     if (!result.ok) {
+      perRpc.push({ rpcUrl: result.rpcUrl, rpcError: parseRpcErrorMessage(result.error) });
       return;
     }
     const status = result.value.value[0] ?? null;
@@ -297,12 +325,14 @@ function selectQuorumObservation(
     return { selected: undefined, rpcDisagreement: false };
   }
 
-  if (observations.length === 1) {
-    return { selected: observations[0], rpcDisagreement: false };
+  const validObservations = observations.filter((obs) => !obs.rpcError);
+
+  if (validObservations.length <= 1) {
+    return { selected: validObservations[0] ?? observations[0], rpcDisagreement: false };
   }
 
   const groupCounts = new Map<string, { count: number; best: PerRpcObservation }>();
-  observations.forEach((obs) => {
+  validObservations.forEach((obs) => {
     const key = `${obs.confirmationStatus ?? 'null'}:${obs.slot ?? 'null'}`;
     const existing = groupCounts.get(key);
     if (!existing) {
@@ -315,7 +345,7 @@ function selectQuorumObservation(
     }
   });
 
-  const effectiveQuorum = Math.min(quorumK, observations.length);
+  const effectiveQuorum = Math.min(quorumK, validObservations.length);
   const quorumGroups = Array.from(groupCounts.values()).filter(
     (group) => group.count >= effectiveQuorum,
   );
@@ -324,7 +354,7 @@ function selectQuorumObservation(
     return { selected: quorumGroups[0].best, rpcDisagreement: false };
   }
 
-  const ranked = [...observations].sort((a, b) => statusRank(b) - statusRank(a));
+  const ranked = [...validObservations].sort((a, b) => statusRank(b) - statusRank(a));
   return { selected: ranked[0], rpcDisagreement: true };
 }
 
@@ -411,6 +441,16 @@ function buildSubmitErrorResult(args: {
     submit_time: args.submit_time,
     rpc_used: args.rpcUrlsUsed,
     observed_status: [],
+    phase_graph: buildPhaseGraph({
+      observed_status: [],
+      evidence: {
+        err: args.errorMessage,
+        rpcUrlsUsed: args.rpcUrlsUsed,
+        rpcDisagreement: false,
+        perRpc: [],
+      },
+      submitAccepted: false,
+    }),
     error: args.errorMessage,
     classification: args.classificationOverride,
     evidence: {
@@ -451,6 +491,136 @@ export function mapSubmitErrorClassification(
     return 'RPC_REJECT';
   }
   return 'RPC_REJECT';
+}
+
+function buildPhaseGraph(input: {
+  observed_status: TimelineEvent[];
+  evidence: TraceEvidence;
+  submitAccepted: boolean;
+  submitAcceptedAtMs?: number;
+}): PhaseEdge[] {
+  const edges: PhaseEdge[] = [];
+  const source = phaseSource(input.evidence);
+  const confidence = phaseConfidence(input.evidence);
+
+  const submitEdgeAt = 0;
+  if (input.submitAccepted) {
+    edges.push({
+      from: 'SUBMIT',
+      to: 'RPC_ACCEPTED',
+      timestampMs: input.submitAcceptedAtMs ?? submitEdgeAt,
+      source,
+      confidence,
+    });
+  }
+
+  const propagatedAt = firstStatusAt(input.observed_status);
+  if (propagatedAt != null) {
+    edges.push({
+      from: input.submitAccepted ? 'RPC_ACCEPTED' : 'SUBMIT',
+      to: 'PROPAGATED',
+      timestampMs: propagatedAt,
+      source,
+      confidence,
+    });
+  }
+
+  const processedAt = statusAt(input.observed_status, 'processed');
+  if (processedAt != null) {
+    edges.push({
+      from: 'PROPAGATED',
+      to: 'LEADER_RECEIVED',
+      timestampMs: processedAt,
+      source,
+      confidence,
+    });
+  }
+
+  const executedAt = executionAt(input);
+  if (executedAt != null) {
+    edges.push({
+      from: processedAt != null ? 'LEADER_RECEIVED' : 'PROPAGATED',
+      to: 'EXECUTED',
+      timestampMs: executedAt,
+      source,
+      confidence,
+    });
+  }
+
+  const confirmedAt = statusAt(input.observed_status, 'confirmed');
+  if (confirmedAt != null) {
+    edges.push({
+      from: executedAt != null ? 'EXECUTED' : 'PROPAGATED',
+      to: 'CONFIRMED',
+      timestampMs: confirmedAt,
+      source,
+      confidence,
+    });
+  }
+
+  const finalizedAt = statusAt(input.observed_status, 'finalized');
+  if (finalizedAt != null) {
+    edges.push({
+      from: confirmedAt != null ? 'CONFIRMED' : 'PROPAGATED',
+      to: 'FINALIZED',
+      timestampMs: finalizedAt,
+      source,
+      confidence,
+    });
+  }
+
+  return edges;
+}
+
+function firstStatusAt(events: TimelineEvent[]): number | null {
+  if (events.length === 0) {
+    return null;
+  }
+  return events[0].observedAtMs;
+}
+
+function statusAt(
+  events: TimelineEvent[],
+  status: 'processed' | 'confirmed' | 'finalized',
+): number | null {
+  const event = events.find((entry) => entry.status === status);
+  return event ? event.observedAtMs : null;
+}
+
+function executionAt(input: {
+  observed_status: TimelineEvent[];
+  evidence: TraceEvidence;
+}): number | null {
+  if (input.evidence.err == null && !input.evidence.logsSnippet) {
+    return null;
+  }
+  const confirmedAt = statusAt(input.observed_status, 'confirmed');
+  if (confirmedAt != null) {
+    return confirmedAt;
+  }
+  const processedAt = statusAt(input.observed_status, 'processed');
+  if (processedAt != null) {
+    return processedAt;
+  }
+  return firstStatusAt(input.observed_status);
+}
+
+function phaseSource(evidence: TraceEvidence): string {
+  const rpcUrl = evidence.selected?.rpcUrl ?? evidence.rpcUrl ?? 'unknown';
+  if (!evidence.rpcDisagreement && (evidence.perRpc?.length ?? 0) > 1) {
+    return 'quorum';
+  }
+  return `rpc:${rpcUrl}`;
+}
+
+function phaseConfidence(evidence: TraceEvidence): number {
+  if (!evidence.rpcDisagreement && (evidence.perRpc?.length ?? 0) > 1) {
+    return 0.8;
+  }
+  if ((evidence.perRpc?.length ?? 0) === 1) {
+    return 0.6;
+  }
+  return 0.4;
 }
 
 function delay(ms: number): Promise<void> {

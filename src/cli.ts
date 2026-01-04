@@ -16,6 +16,7 @@ program
   .requiredOption('--sig <signature>', 'Transaction signature')
   .requiredOption('--rpc <urls>', 'Comma-separated RPC URLs')
   .option('--timeout <ms>', 'Timeout in milliseconds', (value) => Number(value))
+  .option('--per-tick-timeout-ms <ms>', 'Per-RPC timeout per poll tick', (value) => Number(value))
   .action(async (options) => {
     const rpcUrls = String(options.rpc)
       .split(',')
@@ -26,6 +27,7 @@ program
       signature: options.sig,
       rpcUrls,
       timeoutMs: options.timeout,
+      perTickTimeoutMs: options.perTickTimeoutMs,
     });
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
@@ -38,6 +40,7 @@ program
   .requiredOption('--raw <base64>', 'Base64-encoded transaction')
   .option('--skip-preflight', 'Skip preflight simulation', false)
   .option('--timeout-ms <ms>', 'Timeout in milliseconds', (value) => Number(value), 45_000)
+  .option('--per-tick-timeout-ms <ms>', 'Per-RPC timeout per poll tick', (value) => Number(value))
   .action(async (options) => {
     const rpcUrls = String(options.rpc)
       .split(',')
@@ -50,6 +53,7 @@ program
       rawTransaction,
       skipPreflight: Boolean(options.skipPreflight),
       timeoutMs: options.timeoutMs,
+      perTickTimeoutMs: options.perTickTimeoutMs,
     });
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

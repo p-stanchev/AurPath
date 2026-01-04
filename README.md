@@ -16,7 +16,7 @@ Solana operators and RPC providers lack visibility into transaction failure root
 - **Multi-RPC tracing**: Correlates transaction status and error reports across independent RPC endpoints
 - **Failure classification**: Categorizes failures into stages (censorship, leader congestion, account state, etc.) based on available evidence
 - **Status tracking**: Polls and records transaction status transitions (processed → confirmed → finalized) with slot numbers
-- **Machine-readable output**: Provides detailed JSON with evidence, RPC disagreements, and logs for integration into monitoring systems
+- **Machine-readable output**: Provides detailed JSON with evidence, RPC disagreements, phase graph edges, and logs for integration into monitoring systems
 - **Multiple interfaces**: Offers CLI, library API, and HTTP server for flexible integration
 
 ## What AurPath Does NOT Do
@@ -50,10 +50,10 @@ npm run build
 
 ```bash
 # Trace a signature
-node dist/cli.js trace --sig <SIG> --rpc https://rpc1,https://rpc2
+node dist/cli.js trace --sig <SIG> --rpc https://rpc1,https://rpc2 --per-tick-timeout-ms 1200
 
 # Submit and trace a raw transaction (base64)
-node dist/cli.js submit-trace --rpc https://rpc1,https://rpc2 --raw <BASE64>
+node dist/cli.js submit-trace --rpc https://rpc1,https://rpc2 --raw <BASE64> --per-tick-timeout-ms 1200
 
 # Or, after npm install -g
 aurpath trace --sig <SIG> --rpc https://rpc1,https://rpc2
@@ -94,6 +94,29 @@ const result = await traceTransaction({
       "slot": 234567891,
       "observedAtMs": 4500,
       "rpcUrl": "https://rpc1"
+    }
+  ],
+  "phase_graph": [
+    {
+      "from": "SUBMIT",
+      "to": "RPC_ACCEPTED",
+      "timestampMs": 120,
+      "source": "rpc:https://rpc1",
+      "confidence": 0.6
+    },
+    {
+      "from": "RPC_ACCEPTED",
+      "to": "PROPAGATED",
+      "timestampMs": 1200,
+      "source": "rpc:https://rpc1",
+      "confidence": 0.6
+    },
+    {
+      "from": "PROPAGATED",
+      "to": "CONFIRMED",
+      "timestampMs": 4500,
+      "source": "rpc:https://rpc1",
+      "confidence": 0.6
     }
   ],
   "error": null,

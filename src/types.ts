@@ -36,6 +36,7 @@ export type TraceInput = {
   timeoutMs?: number;
   quorumK?: number;
   maxRpcsPerTick?: number;
+  perTickTimeoutMs?: number;
 };
 
 export type TraceResult = {
@@ -43,9 +44,20 @@ export type TraceResult = {
   submit_time: string;
   rpc_used: string[];
   observed_status: TimelineEvent[];
+  phase_graph: PhaseEdge[];
   error?: string;
   classification: TraceClassification;
   evidence: TraceEvidence;
+};
+
+export type Phase = 'SUBMIT' | 'RPC_ACCEPTED' | 'PROPAGATED' | 'LEADER_RECEIVED' | 'EXECUTED' | 'CONFIRMED' | 'FINALIZED';
+
+export type PhaseEdge = {
+  from: Phase;
+  to: Phase;
+  timestampMs: number;
+  source: string;
+  confidence: number;
 };
 
 export type PerRpcObservation = {
@@ -55,6 +67,7 @@ export type PerRpcObservation = {
   err?: unknown;
   blockTime?: number | null;
   logsSnippet?: string;
+  rpcError?: string;
 };
 
 export type SubmitTraceInput = {
@@ -64,6 +77,7 @@ export type SubmitTraceInput = {
   timeoutMs?: number;
   quorumK?: number;
   maxRpcsPerTick?: number;
+  perTickTimeoutMs?: number;
 };
 
 export type RpcCallResult<T> =
