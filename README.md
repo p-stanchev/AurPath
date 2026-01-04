@@ -2,6 +2,30 @@
 
 AurPath is a standalone, open-source tool for tracing Solana transaction outcomes and classifying failure stages. It works with any RPC endpoint set and does **not** depend on AurFlow, while leaving room for a future optional AurFlow adapter.
 
+## Problem Statement
+
+Solana operators and RPC providers lack visibility into transaction failure root causes. When a transaction fails, a single RPC endpoint's error message is often incomplete or misleading. Failures can stem from leader congestion, network censorship, insufficient balance, or program-level errors—but standard RPC responses don't reliably distinguish between them. AurPath solves this by correlating evidence from multiple RPC endpoints to provide better-effort classification of failure stages.
+
+## What AurPath Does
+
+- **Multi-RPC tracing**: Correlates transaction status and error reports across independent RPC endpoints
+- **Failure classification**: Categorizes failures into stages (censorship, leader congestion, account state, etc.) based on available evidence
+- **Status tracking**: Polls and records transaction status transitions (processed → confirmed → finalized) with slot numbers
+- **Machine-readable output**: Provides detailed JSON with evidence, RPC disagreements, and logs for integration into monitoring systems
+- **Multiple interfaces**: Offers CLI, library API, and HTTP server for flexible integration
+
+## What AurPath Does NOT Do
+
+- **Does not hold funds or execute transactions**: AurPath is a read-only tracing tool. It retrieves transaction history and status; it does not manage wallets or sign transactions.
+- **Does not provide guaranteed classification**: Best-effort classification based on RPC evidence. Multiple RPC nodes may have incomplete or delayed views of the cluster.
+- **Does not distinguish all failure modes with certainty**: Cannot perfectly distinguish censorship from leader congestion without additional on-chain observers or historical finality data.
+- **Does not replace on-chain program verification**: Does not analyze program logic, accounts, or instruction execution. Use Solana validators' own tools for detailed program debugging.
+- **Does not guarantee consistency across clusters or network partitions**: RPC nodes may temporarily disagree; results reflect observed evidence at query time.
+
+## Motivation
+
+Standard RPC errors ("BlockhashNotFound", "InsufficientFundsForFee") only reveal *what* the RPC saw, not *why* the transaction failed network-wide. A transaction might succeed on one RPC and fail on another due to clock skew, reorg depth, or network partition. By querying multiple independent RPC endpoints in parallel and correlating their responses, AurPath constructs a richer picture of the transaction's fate. This is especially valuable for operators of high-stakes applications (DEX bots, MEV-aware validators, bridges) where understanding failure root cause impacts recovery strategy and protocol design.
+
 ## Features
 
 - Trace propagation and inclusion across RPC endpoints
@@ -123,4 +147,4 @@ npm run build
 
 ## License
 
-Apache-2.0
+Licensed under the [Apache License 2.0](LICENSE). See [LICENSE](LICENSE) for details.
