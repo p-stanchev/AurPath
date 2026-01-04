@@ -6,7 +6,7 @@ AurPath is a standalone transaction tracing engine that talks directly to Solana
 2. Build a status timeline from processed/confirmed/finalized transitions.
 3. Build a quorum view from parallel RPC polling to reduce single-node bias.
 4. Produce a causal phase graph of submit/propagation/execution stages with confidence.
-5. Classify the outcome using deterministic rules and recorded evidence.
+5. Classify the outcome using deterministic rules, including fork/rollback signals when evidence regresses.
 6. Emit structured JSON for automation and downstream analysis.
 
 ## Standalone Design

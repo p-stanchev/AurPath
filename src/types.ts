@@ -5,7 +5,9 @@ export type TraceClassification =
   | 'NOT_PROPAGATED'
   | 'LEADER_OR_CONGESTION'
   | 'EXECUTION_ERROR'
-  | 'FINALIZED_OK';
+  | 'FINALIZED_OK'
+  | 'ROLLED_BACK'
+  | 'FORK_TRANSIENT';
 
 export type ConfirmationStatus = 'processed' | 'confirmed' | 'finalized';
 
@@ -28,6 +30,8 @@ export type TraceEvidence = {
   rpcDisagreement?: boolean;
   perRpc?: PerRpcObservation[];
   selected?: PerRpcObservation;
+  finalizedRollback?: boolean;
+  forkAncestryChanged?: boolean;
 };
 
 export type TraceInput = {

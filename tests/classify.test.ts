@@ -79,4 +79,24 @@ describe('classify', () => {
     expect(result.classification).toBe('LEADER_OR_CONGESTION');
     expect(result.negative_proofs).toContain('finality_not_reached_before_timeout');
   });
+
+  it('returns ROLLED_BACK when finality is not stable', () => {
+    const result = classify({
+      ...baseInput(),
+      evidence: { finalizedRollback: true },
+    });
+
+    expect(result.classification).toBe('ROLLED_BACK');
+    expect(result.negative_proofs).toContain('finality_not_stable');
+  });
+
+  it('returns FORK_TRANSIENT when ancestry changed', () => {
+    const result = classify({
+      ...baseInput(),
+      evidence: { forkAncestryChanged: true },
+    });
+
+    expect(result.classification).toBe('FORK_TRANSIENT');
+    expect(result.negative_proofs).toContain('fork_ancestry_changed');
+  });
 });

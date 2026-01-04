@@ -14,7 +14,7 @@ Solana operators and RPC providers lack visibility into transaction failure root
 ## What AurPath Does
 
 - **Multi-RPC tracing**: Correlates transaction status and error reports across independent RPC endpoints
-- **Failure classification**: Categorizes failures into stages (censorship, leader congestion, account state, etc.) based on available evidence
+- **Failure classification**: Categorizes failures into stages (censorship, leader congestion, account state, fork rollback) based on available evidence
 - **Status tracking**: Polls and records transaction status transitions (processed → confirmed → finalized) with slot numbers
 - **Machine-readable output**: Provides detailed JSON with evidence, RPC disagreements, phase graph edges, and logs for integration into monitoring systems
 - **Multiple interfaces**: Offers CLI, library API, and HTTP server for flexible integration

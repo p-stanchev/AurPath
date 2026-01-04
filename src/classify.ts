@@ -30,6 +30,14 @@ export function classify(input: ClassificationInput): ClassificationOutput {
     return buildResult('EXECUTION_ERROR', input, stringifyError(err));
   }
 
+  if (input.evidence.finalizedRollback) {
+    return buildResult('ROLLED_BACK', input);
+  }
+
+  if (input.evidence.forkAncestryChanged) {
+    return buildResult('FORK_TRANSIENT', input);
+  }
+
   if (
     confirmationStatus == null &&
     input.evidence.lastValidBlockHeight != null &&
@@ -105,6 +113,12 @@ function computeConfidence(
       case 'RPC_REJECT':
       case 'PREFLIGHT_FAIL':
         return 0.0;
+      case 'ROLLED_BACK':
+        return -0.1;
+      case 'FORK_TRANSIENT':
+        return -0.15;
+      default:
+        return 0.0;
     }
   })();
 
@@ -119,6 +133,14 @@ function computeNegativeProofs(
   const proofs: string[] = [];
   const confirmationStatus = input.selected?.confirmationStatus;
   const timedOut = input.observedDurationMs >= input.pendingThresholdMs;
+
+  if (classification === 'ROLLED_BACK') {
+    proofs.push('finality_not_stable');
+  }
+
+  if (classification === 'FORK_TRANSIENT') {
+    proofs.push('fork_ancestry_changed');
+  }
 
   if (classification === 'LEADER_OR_CONGESTION') {
     if (timedOut) {

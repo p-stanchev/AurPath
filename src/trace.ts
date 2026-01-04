@@ -153,7 +153,10 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
   };
 
   let lastStatus: SignatureStatus | null = null;
-  let lastStatusName: string | null = null;
+  let lastStatusName: 'processed' | 'confirmed' | 'finalized' | null = null;
+  let lastObservedSlot: number | undefined;
+  let sawFinalized = false;
+  let finalizedSlot: number | undefined;
   let lastBlockHeight: number | undefined;
   let lastBlockhashRefresh = 0;
   let lastBlockHeightRefresh = 0;
@@ -187,6 +190,25 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
       evidence.blockTime = selection.selected.blockTime;
       evidence.logsSnippet = selection.selected.logsSnippet;
 
+      if (
+        lastObservedSlot != null &&
+        selection.selected.slot != null &&
+        selection.selected.slot < lastObservedSlot
+      ) {
+        evidence.forkAncestryChanged = true;
+      }
+
+      if (lastStatusName && statusRankName(selection.selected.confirmationStatus) < statusRankName(lastStatusName)) {
+        evidence.forkAncestryChanged = true;
+      }
+
+      if (selection.selected.confirmationStatus === 'finalized') {
+        sawFinalized = true;
+        finalizedSlot = selection.selected.slot ?? finalizedSlot;
+      } else if (sawFinalized) {
+        evidence.finalizedRollback = true;
+      }
+
       if (selection.selected.confirmationStatus !== lastStatusName) {
         observed_status.push({
           status: selection.selected.confirmationStatus,
@@ -196,6 +218,9 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
         });
         lastStatusName = selection.selected.confirmationStatus;
       }
+      lastObservedSlot = selection.selected.slot ?? lastObservedSlot;
+    } else if (sawFinalized) {
+      evidence.finalizedRollback = true;
     }
 
     if (lastStatus?.err != null && !evidence.logsSnippet) {
@@ -372,6 +397,17 @@ function statusRank(observation: PerRpcObservation): number {
       return 1;
     default:
       return 0;
+  }
+}
+
+function statusRankName(status: 'processed' | 'confirmed' | 'finalized'): number {
+  switch (status) {
+    case 'finalized':
+      return 3;
+    case 'confirmed':
+      return 2;
+    case 'processed':
+      return 1;
   }
 }
 
