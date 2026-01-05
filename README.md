@@ -1,5 +1,9 @@
 # AurPath
 
+<p align="center">
+  <img src="assets/aurpath.svg" alt="AurPath logo" width="240" />
+</p>
+
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6.svg)](https://www.typescriptlang.org/)
 [![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
@@ -8,6 +12,10 @@
 AurPath is a standalone, open-source tool for tracing Solana transaction outcomes and classifying failure stages. It works with any RPC endpoint set and does **not** depend on AurFlow, while leaving room for a future optional AurFlow adapter.
 
 See [THEORY.md](THEORY.md) for confidence semantics and epistemic guarantees.
+
+<p align="center">
+  <img src="assets/dashboard.png" alt="AurPath dashboard" width="900" />
+</p>
 
 ## Problem Statement
 
