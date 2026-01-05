@@ -7,6 +7,8 @@
 
 AurPath is a standalone, open-source tool for tracing Solana transaction outcomes and classifying failure stages. It works with any RPC endpoint set and does **not** depend on AurFlow, while leaving room for a future optional AurFlow adapter.
 
+See [THEORY.md](THEORY.md) for confidence semantics and epistemic guarantees.
+
 ## Problem Statement
 
 Solana operators and RPC providers lack visibility into transaction failure root causes. When a transaction fails, a single RPC endpoint's error message is often incomplete or misleading. Failures can stem from leader congestion, network censorship, insufficient balance, or program-level errors—but standard RPC responses don't reliably distinguish between them. AurPath solves this by correlating evidence from multiple RPC endpoints to provide better-effort classification of failure stages.
