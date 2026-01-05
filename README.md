@@ -65,6 +65,19 @@ aurpath submit-trace --rpc https://rpc1,https://rpc2 --raw <BASE64>
 node dist/cli.js serve --port 8787 --rpc https://rpc1,https://rpc2
 ```
 
+## Trace Viewer (GUI)
+
+AurPath includes a lightweight read-only viewer. Start the server and open the viewer in your browser.
+
+```bash
+aurpath serve --port 8787 --rpc https://rpc1,https://rpc2
+node dist/cli.js serve --port 8787 --rpc https://api.mainnet-beta.solana.com,https://rpc.ankr.com/solana
+```
+
+Open `http://localhost:8787/viewer`.
+
+Viewer is read-only and optional.
+
 ## Library
 
 ```ts

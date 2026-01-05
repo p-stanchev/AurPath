@@ -1,5 +1,7 @@
 import { Command } from 'commander';
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import { URL } from 'node:url';
 import { decodeBase64Transaction, submitAndTrace, traceTransaction } from './trace.js';
 
@@ -70,6 +72,7 @@ program
       .map((url: string) => url.trim())
       .filter(Boolean);
 
+    const viewerRoot = resolveViewerRoot();
     const server = http.createServer(async (req, res) => {
       if (!req.url) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -78,6 +81,12 @@ program
       }
 
       const url = new URL(req.url, `http://${req.headers.host}`);
+      if (url.pathname === '/viewer' || url.pathname === '/viewer/') {
+        return serveStatic(res, path.join(viewerRoot, 'index.html'), 'text/html');
+      }
+      if (url.pathname === '/viewer/viewer.js') {
+        return serveStatic(res, path.join(viewerRoot, 'viewer.js'), 'text/javascript');
+      }
       if (url.pathname !== '/trace') {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Not found' }));
@@ -107,3 +116,28 @@ program
   });
 
 program.parseAsync(process.argv);
+
+function resolveViewerRoot(): string {
+  const cwd = process.cwd();
+  const srcPath = path.join(cwd, 'src', 'viewer');
+  if (fs.existsSync(srcPath)) {
+    return srcPath;
+  }
+  return path.join(cwd, 'dist', 'viewer');
+}
+
+function serveStatic(
+  res: http.ServerResponse,
+  filePath: string,
+  contentType: string,
+): void {
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(data);
+  });
+}
