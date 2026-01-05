@@ -80,6 +80,7 @@ const result = await traceTransaction({
 ```json
 {
   "signature": "5w7...",
+  "schema_version": "1.0",
   "submit_time": "2026-04-01T20:33:00.000Z",
   "rpc_used": ["https://rpc1", "https://rpc2"],
   "observed_status": [
@@ -165,6 +166,10 @@ const result = await traceTransaction({
   }
 }
 ```
+
+## Schema Versioning
+
+AurPath emits a `schema_version` string on every trace result. Backward-compatible changes (additive fields) will increment the minor version. Breaking changes (removal/renaming/semantic changes) will increment the major version and be documented with migration guidance.
 
 ## Limitations
 

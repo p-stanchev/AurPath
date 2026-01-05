@@ -45,6 +45,7 @@ export type TraceInput = {
 
 export type TraceResult = {
   signature: string;
+  schema_version: '1.0';
   submit_time: string;
   rpc_used: string[];
   observed_status: TimelineEvent[];

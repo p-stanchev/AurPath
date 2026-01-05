@@ -77,6 +77,7 @@ export async function submitAndTrace(input: SubmitTraceInput): Promise<TraceResu
       };
       return {
         signature: 'UNKNOWN',
+        schema_version: '1.0',
         submit_time,
         rpc_used: pool.getUsedUrls(),
         observed_status: [],
@@ -274,6 +275,7 @@ async function traceLoop(input: TraceLoopInput): Promise<TraceResult> {
 
   return {
     signature,
+    schema_version: '1.0',
     submit_time,
     rpc_used: pool.getUsedUrls(),
     observed_status,
@@ -478,6 +480,7 @@ function buildSubmitErrorResult(args: {
 }): TraceResult {
   return {
     signature: args.signature,
+    schema_version: '1.0',
     submit_time: args.submit_time,
     rpc_used: args.rpcUrlsUsed,
     observed_status: [],
